@@ -1,0 +1,8 @@
+{
+  "name": "context-meter",
+  "version": "0.1.0",
+  "description": "A band above the prompt showing how full the context window is, fading from green to red as it fills.",
+  "author": { "name": "CJ Avilla" },
+  "homepage": "https://github.com/cjavdev/mods",
+  "types": "./types/index.d.ts"
+}
