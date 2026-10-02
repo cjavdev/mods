@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+# A stand-in for the ant CLI with sample sessions, for screenshots and trying
+# the mod without a Managed Agents account. Put this folder first on PATH.
+import json, os, sys, tempfile, time
+from datetime import datetime, timedelta, timezone
+
+now = datetime.now(timezone.utc)
+ago = lambda m: (now - timedelta(minutes=m)).strftime('%Y-%m-%dT%H:%M:%SZ')
+S = [
+    ('sesn_011CZkZAtmR3yMPDzynEDxu7', 'Review PR #482: auth middleware', 'running', 'Code reviewer', 7, 84, 200, 12, 1, None),
+    ('sesn_011CZkZBa91KpQ2LmN4xRt8w', 'Fix flaky checkout test', 'running', 'CI fixer', 3, 41, 500, 6, 0, None),
+    ('sesn_011CZkZCq2PLmv7Xw0yHnE3s', 'Triage issues 2026-10-02', 'rescheduling', 'Nightly triage', 2, 12, 200, 20, 3, 'depl_011CZkYnightly'),
+    ('sesn_011CZkZDx8RtvB2nQpL6sK1a', 'Review PR #479: billing webhooks', 'idle', 'Code reviewer', 7, 140, 200, 150, 120, None),
+    ('sesn_011CZkZEw3MnbV9cXz2qLp5d', 'Summarize September incidents', 'idle', 'Researcher', 4, 233, None, 260, 210, None),
+    ('sesn_011CZkZF5tYuIo8pAs1dFg2h', 'Plan Q4 roadmap', 'terminated', 'Engineering lead', 3, 480, None, 420, 300, None),
+    ('sesn_011CZkZG7hJkLz4xCv6bNm9q', 'Triage issues 2026-10-01', 'terminated', 'Nightly triage', 2, 197, 200, 1460, 1440, 'depl_011CZkYnightly'),
+]
+args = sys.argv[1:]
+opt = lambda name: args[args.index(name) + 1] if name in args else None
+
+# A short transcript per session, oldest first, in the API's own event shapes.
+n = [0]
+def ev(kind, minutes, **fields):
+    n[0] += 1
+    return {'id': f'sevt_demo{n[0]:04d}', 'type': kind, 'processed_at': ago(minutes), **fields}
+say = lambda kind, m, text: ev(kind, m, content=[{'type': 'text', 'text': text}])
+tool = lambda m, tid, name, inp: {**ev('agent.tool_use', m, name=name, input=inp), 'id': tid}
+done = lambda m, tid: ev('agent.tool_result', m, tool_use_id=tid, content=[{'type': 'text', 'text': 'ok'}], is_error=False)
+idle = lambda m, why, ids=None: ev('session.status_idle', m, stop_reason={'type': why, **({'event_ids': ids} if ids else {})})
+
+def transcript(sid):
+    i = [s[0] for s in S].index(sid) if sid in [s[0] for s in S] else -1
+    if i == 0:
+        return [say('user.message', 12, 'Review PR #482. Focus on the token refresh path.'),
+                ev('session.status_running', 12),
+                tool(11, 'sevt_t1', 'bash', {'command': 'gh pr diff 482'}), done(11, 'sevt_t1'),
+                tool(10, 'sevt_t2', 'read', {'file_path': 'src/auth/middleware.ts'}), done(10, 'sevt_t2'),
+                say('agent.message', 8, 'The refresh path retries on 401 but never clears the stale token, so a revoked session loops until the retry cap.'),
+                tool(6, 'sevt_t3', 'grep', {'pattern': 'refreshToken\\(', 'path': 'src'}), done(5, 'sevt_t3'),
+                say('agent.message', 1, 'Two other callers share the helper. Writing the review comments now.')]
+    if i == 3:
+        return [say('user.message', 150, 'Review PR #479 and push small fixes to the branch.'),
+                ev('session.status_running', 150),
+                tool(140, 'sevt_t4', 'read', {'file_path': 'src/billing/webhooks.ts'}), done(139, 'sevt_t4'),
+                say('agent.message', 125, 'The signature check runs after the body is parsed. I have a fix that verifies the raw body first.'),
+                tool(121, 'sevt_t5', 'bash', {'command': 'git push origin fix/webhook-signature'}),
+                idle(120, 'requires_action', ['sevt_t5'])]
+    if i < 0:
+        return []
+    _, title, status, *_rest = S[i]
+    out = [say('user.message', S[i][7], title), ev('session.status_running', S[i][7]),
+           say('agent.message', S[i][8] + 1, f'Working on it: {title.lower()}.')]
+    if status == 'idle':
+        out.append(idle(S[i][8], 'end_turn'))
+    if status == 'terminated':
+        out.append(ev('session.status_terminated', S[i][8]))
+    return out
+
+log = lambda sid: os.path.join(tempfile.gettempdir(), f'roster-demo-{sid}.jsonl')
+def sent(sid):
+    try:
+        return [json.loads(l) for l in open(log(sid))]
+    except FileNotFoundError:
+        return []
+
+# What the demo session does with each event you send it.
+def answer(sid, event):
+    kind = event.get('type')
+    n[0] = 5000 + len(sent(sid)) * 4
+    if kind == 'user.message':
+        return [{**event, **ev('user.message', 0)}, ev('session.status_running', 0),
+                say('agent.message', 0, 'Got it. (This is the demo ant, so that is all it says.)'), idle(0, 'end_turn')]
+    if kind == 'user.tool_confirmation':
+        ok = event.get('result') == 'allow'
+        return [ev('user.tool_confirmation', 0, result=event.get('result'), tool_use_id=event.get('tool_use_id'),
+                   content=[{'type': 'text', 'text': 'allowed it' if ok else 'denied it'}]),
+                ev('session.status_running', 0),
+                *([done(0, event.get('tool_use_id'))] if ok else []),
+                say('agent.message', 0, 'Pushed the fix.' if ok else 'Leaving the branch alone.'), idle(0, 'end_turn')]
+    if kind == 'user.interrupt':
+        return [ev('user.interrupt', 0), idle(0, 'end_turn')]
+    return []
+if args[:2] == ['beta:sessions', 'list']:
+    print(json.dumps([
+        {'id': i, 'title': t, 'status': st, 'agent_name': a, 'agent_version': v, 'cost': str(c),
+         'cap': str(cap) if cap else None, 'created_at': ago(cr), 'updated_at': ago(up), 'deployment_id': d}
+        for (i, t, st, a, v, c, cap, cr, up, d) in S]))
+elif args[:2] == ['beta:sessions:events', 'stream']:
+    for ev, why, wait in [('session.status_running', None, 1), ('session.status_idle', 'requires_action', 8), ('session.status_running', None, 6), ('session.status_idle', 'end_turn', 10)]:
+        time.sleep(wait)
+        print(json.dumps({'type': ev, 'why': why}), flush=True)
+    time.sleep(3600)
+elif args[:2] == ['beta:sessions:events', 'list']:
+    sid = opt('--session-id')
+    events = transcript(sid) + sent(sid)
+    print(json.dumps({'data': list(reversed(events))[:int(opt('--limit') or 60)], 'next_page': None}))
+elif args[:2] == ['beta:sessions:events', 'send']:
+    sid, sending = opt('--session-id'), json.loads(opt('--event'))
+    with open(log(sid), 'a') as f:
+        for out in answer(sid, sending):
+            f.write(json.dumps(out) + '\n')
+    print(json.dumps({'data': [sending]}))
+else:
+    print(f'demo ant: {" ".join(args)} is not part of the demo', file=sys.stderr)
+    sys.exit(2)

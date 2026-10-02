@@ -1,0 +1,42 @@
+{
+  "name": "roster",
+  "version": "0.1.0",
+  "description": "Your Claude Managed Agents sessions inside Claude Code: /roster opens a pane of running and recent sessions, and /roster-watch follows one as a background task.",
+  "author": {
+    "name": "CJ Avilla"
+  },
+  "homepage": "https://github.com/cjavdev/mods",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Register /roster and /roster-watch.",
+      "default": true
+    },
+    "antPath": {
+      "type": "string",
+      "title": "ant CLI",
+      "description": "The ant command to run: a name on your PATH or a full path. It must be logged in (ant auth login).",
+      "default": "ant"
+    },
+    "limit": {
+      "type": "number",
+      "title": "Sessions to load",
+      "description": "How many of the newest sessions the pane loads on each refresh.",
+      "default": 50
+    },
+    "refreshSeconds": {
+      "type": "number",
+      "title": "Refresh every (seconds)",
+      "description": "How often the open pane reloads the session list. 0 refreshes only on [r].",
+      "default": 15
+    },
+    "watchMinutes": {
+      "type": "number",
+      "title": "Watch for (minutes)",
+      "description": "How long a watched session's background task runs before it stops. At most 30.",
+      "default": 30
+    }
+  }
+}
