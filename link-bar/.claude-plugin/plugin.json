@@ -1,0 +1,28 @@
+{
+  "name": "link-bar",
+  "version": "0.1.0",
+  "description": "Links in the bar under the prompt to the artifacts and pull requests mentioned most recently in the conversation.",
+  "author": { "name": "CJ Avilla" },
+  "homepage": "https://github.com/cjavdev/mods",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Show artifact and pull request links in the bar under the prompt.",
+      "default": true
+    },
+    "artifacts": {
+      "type": "number",
+      "title": "Artifacts",
+      "description": "How many of the most recently mentioned claude.ai artifacts to link. 0 shows none.",
+      "default": 3
+    },
+    "pullRequests": {
+      "type": "number",
+      "title": "Pull requests",
+      "description": "How many of the most recently mentioned GitHub pull requests to link. 0 shows none.",
+      "default": 5
+    }
+  }
+}
