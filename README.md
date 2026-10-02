@@ -5,6 +5,8 @@ Mods for [Claude Code](https://claude.com/claude-code): small plugins built on C
 | Mod | What it does |
 | --- | --- |
 | [context-meter](./context-meter) | A bar above the prompt showing how full the context window is, fading from green to red as it fills. |
+| [cache-shot-clock](./cache-shot-clock) | A countdown above the prompt to when the prompt cache expires and the next turn pays a full cache write. |
+| [cache-saver](./cache-saver) | Summarizes an idle session while its cache is still warm, then lets you pick: keep the full session (re-cache it) or continue from the summary. |
 
 ![context-meter](./context-meter/screenshots/progression.png)
 

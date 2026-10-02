@@ -1,0 +1,23 @@
+{
+  "name": "cache-shot-clock",
+  "version": "0.1.0",
+  "description": "A shot clock above the prompt counting down the prompt cache's TTL, so you know how long you have before the next turn pays a full cache write.",
+  "author": { "name": "CJ Avilla" },
+  "homepage": "https://github.com/cjavdev/mods",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "ttl": {
+      "type": "string",
+      "title": "Cache TTL",
+      "description": "auto reads it from the session transcript; 5m or 1h forces it.",
+      "default": "auto",
+      "options": ["auto", "5m", "1h"]
+    },
+    "warnSeconds": {
+      "type": "number",
+      "title": "Warn at (seconds left)",
+      "description": "Toast when the idle cache has this many seconds left; 0 turns the toast off.",
+      "default": 60
+    }
+  }
+}
