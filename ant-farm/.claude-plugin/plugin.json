@@ -1,0 +1,42 @@
+{
+  "name": "ant-farm",
+  "version": "0.1.0",
+  "description": "Prototype: tend your Claude Managed Agents from Claude Code through the ant CLI. A fleet bar and mission control, live session TV, @agent asks, dispatch to the cloud, an approval inbox, ant apply plans, a schedule board, a flight recorder, bake-offs and the farm itself.",
+  "author": {
+    "name": "CJ Avilla"
+  },
+  "homepage": "https://github.com/cjavdev/mods",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Show the fleet bar and serve the ant-farm commands and tools.",
+      "default": true
+    },
+    "antPath": {
+      "type": "string",
+      "title": "ant CLI",
+      "description": "The ant executable to run. It uses whatever profile `ant auth status` shows.",
+      "default": "ant"
+    },
+    "pollSeconds": {
+      "type": "number",
+      "title": "Refresh every (seconds)",
+      "description": "How often the fleet (agents, sessions, deployments) is re-read.",
+      "default": 30
+    },
+    "defaultEnvironment": {
+      "type": "string",
+      "title": "Default environment",
+      "description": "The environment id a new session runs in when its agent has never run before. Empty means none.",
+      "default": ""
+    },
+    "sessionBudget": {
+      "type": "number",
+      "title": "Session budget (USD)",
+      "description": "The spend cap put on every session started from here (asks, dispatches, bake-offs).",
+      "default": 1
+    }
+  }
+}

@@ -7,7 +7,20 @@ def x256(n):
     if n<232:
         n-=16; v=[0,95,135,175,215,255]; return (v[n//36],v[n//6%6],v[n%6])
     g=8+(n-232)*10; return (g,g,g)
+# A glyph the page font lacks falls back to one of another width and shifts
+# the rest of its row, so each such character gets a cell of its own: two
+# columns for an emoji, one for anything else.
+def cells(text):
+    out=[]
+    for ch in text:
+        n=ord(ch)
+        if n<0x2000 or 0x2500<=n<=0x259f: out.append(html.escape(ch))
+        elif n in (0xfe0f,0x200d): out.append(ch)
+        else: out.append('<span class=c%d>%s</span>'%(2 if n>=0x1f000 else 1,html.escape(ch)))
+    return ''.join(out)
 def line2html(s):
+    # Hyperlinks and other OSC sequences draw nothing.
+    s=re.sub(r'\x1b\][^\x07\x1b]*(\x07|\x1b\\)','',s)
     out=[]; st={}
     for m in re.finditer(r'\x1b\[([0-9;]*)m|([^\x1b]+)', s):
         if m.group(2) is not None:
@@ -19,7 +32,7 @@ def line2html(s):
             if st.get('bold'): css.append('font-weight:700')
             if st.get('dim'): css.append('opacity:.6')
             if st.get('it'): css.append('font-style:italic')
-            t=html.escape(m.group(2))
+            t=cells(m.group(2))
             out.append('<span style="%s">%s</span>'%(';'.join(css),t) if css else t); continue
         codes=[int(c) if c else 0 for c in m.group(1).split(';')]
         i=0
@@ -51,7 +64,12 @@ body{{margin:0;background:#0b0e14;padding:28px;display:inline-block}}
 .bar{{height:30px;background:#161b22;display:flex;align-items:center;padding:0 12px;gap:8px;color:#8b949e;font:12px -apple-system,sans-serif}}
 .d{{width:12px;height:12px;border-radius:50%}}
 .t{{flex:1;text-align:center;margin-right:52px}}
-pre{{margin:0;padding:14px 18px;color:#e6edf3;font:14px/1.35 Menlo,"SF Mono",monospace;white-space:pre}}
+pre{{margin:0;padding:14px 18px;color:#e6edf3;font:14px/1.35 Menlo,"SF Mono","Apple Color Emoji",monospace;white-space:pre}}
+.c1,.c2{{display:inline-block;width:1ch;height:1.35em;line-height:1.35;vertical-align:top;text-align:center;overflow:hidden}}
+.c2{{width:2ch}}
+pre{{font-variant-emoji:text}}
+pre span{{padding:.09em 0}}
+pre .c1,pre .c2{{padding:0}}
 </style><div class=win><div class=bar><span class=d style="background:#ff5f57"></span><span class=d style="background:#febc2e"></span><span class=d style="background:#28c840"></span><span class=t>{html.escape(title)}</span></div><pre>{body}</pre></div>'''
 if __name__=='__main__':
     src,dst,n,title=sys.argv[1],sys.argv[2],int(sys.argv[3]),sys.argv[4]

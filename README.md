@@ -7,6 +7,7 @@ Mods for [Claude Code](https://claude.com/claude-code): small plugins that add w
 - [cache-shot-clock](#cache-shot-clock): a countdown to when your prompt cache expires
 - [context-meter](#context-meter): how full the context window is
 - [cache-saver](#cache-saver): pick up an idle session from a summary instead of re-caching it
+- [ant-farm](#ant-farm-prototype) (prototype): tend your Claude Managed Agents through the `ant` CLI
 
 ## cache-shot-clock
 
@@ -54,6 +55,24 @@ Summarizes an idle session while its cache is still warm. When you come back to 
 | `minTokens` | `30000` | Sessions smaller than this get no summary. |
 | `testTtlSeconds` | `0` | For testing: treat the cache as expiring after this many seconds. |
 
+## ant-farm (prototype)
+
+Your Claude Managed Agents, tended from Claude Code through the `ant` CLI: a fleet bar and mission control, live sessions you can talk to, `@agent` asks, work Claude dispatches to the cloud, approvals above the prompt, `ant apply` plans, a schedule board, a flight recorder, bake-offs, and the farm itself. It is a prototype of ten experiences; its README shows each one running.
+
+[README and source →](./ant-farm)
+
+![Mission control: every agent with runs, a 26-week activity strip, cost and last run](./ant-farm/screenshots/fleet.png)
+
+![The farm: a chamber per agent, and an ant for every tool call of a live session](./ant-farm/screenshots/farm.gif)
+
+| Setting | Default | |
+| --- | --- | --- |
+| `enabled` | `true` | Turns the mod off without unloading it. |
+| `antPath` | `ant` | The `ant` executable to run. |
+| `pollSeconds` | `30` | How often the fleet is re-read. |
+| `defaultEnvironment` | empty | The environment id a new session runs in when its agent has never run before. |
+| `sessionBudget` | `1` | The spend cap in dollars put on every session the mod starts. |
+
 ## Install
 
 You need Claude Code 2.1.287 or newer.
@@ -66,6 +85,12 @@ git clone https://github.com/cjavdev/mods.git ~/mods
 
 ```sh
 claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --plugin-dir ~/mods/cache-saver
+```
+
+**Try the ant-farm prototype** (it needs the `ant` CLI, logged in):
+
+```sh
+claude --plugin-dir ~/mods/ant-farm
 ```
 
 **Load them in every session:** add the folders to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, separated by `:`.

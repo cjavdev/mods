@@ -3,3 +3,6 @@
 */tsconfig.json
 .claude/
 .DS_Store
+
+# Written by ant apply; it names the org the demo colony was applied to.
+ant-farm/examples/colony/claude-lock.json
