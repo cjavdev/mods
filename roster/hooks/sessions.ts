@@ -1,4 +1,4 @@
-import type { AgentSession, SessionStatus } from '../types'
+import type { AgentSession, SessionEvent, SessionStatus } from '../types'
 
 // Applied to the list envelope (`--format raw` skips auto-pagination, so one
 // page of the newest sessions): keeps each session to the fields the pane draws
@@ -132,3 +132,111 @@ export const watchCommand = (ant: string, id: string): string =>
     '| grep --line-buffered -E',
     shellQuote('"session\\.status_(idle|terminated|rescheduled)"'),
   ].join(' ')
+
+export const EVENTS_TRANSFORM =
+  'data.#.{id,type,processed_at,"text":content.0.text,name,input,' +
+  '"why":stop_reason.type,result,"ids":stop_reason.event_ids,is_error}'
+
+export const eventsArgs = (id: string, limit: number, withTransform: boolean): string[] => [
+  'beta:sessions:events',
+  'list',
+  '--session-id',
+  id,
+  '--order',
+  'desc',
+  '--limit',
+  String(limit),
+  '--format',
+  'raw',
+  ...(withTransform ? ['--transform', EVENTS_TRANSFORM] : []),
+]
+
+export const sendArgs = (id: string, event: Record<string, unknown>): string[] => [
+  'beta:sessions:events',
+  'send',
+  '--session-id',
+  id,
+  '--event',
+  JSON.stringify(event),
+]
+
+const oneLine = (v: unknown): string | null => {
+  if (v === undefined || v === null) return null
+  if (typeof v === 'string') return v.replace(/\s+/g, ' ').trim()
+  const o = v as Record<string, unknown>
+  for (const k of ['command', 'file_path', 'path', 'url', 'query', 'pattern']) {
+    if (typeof o[k] === 'string') return oneLine(o[k])
+  }
+  return JSON.stringify(v)
+}
+
+const confirmation = (result: unknown) => (result === 'allow' ? 'allowed it' : result === 'deny' ? 'denied it' : null)
+
+export function toEvent(raw: unknown): SessionEvent | null {
+  const id = str(field(raw, 'id'))
+  const type = str(field(raw, 'type'))
+  if (!id || !type) return null
+  const content = field(raw, 'content')
+  const text = str(field(raw, 'text')) ?? str(field(content, '0', 'text')) ?? (Array.isArray(content) ? null : str(content))
+  const ids = field(raw, 'ids') ?? field(raw, 'stop_reason', 'event_ids')
+  return {
+    id,
+    type,
+    at: time(field(raw, 'processed_at')),
+    text: text ?? confirmation(field(raw, 'result')),
+    name: str(field(raw, 'name')),
+    input: oneLine(field(raw, 'input')),
+    why: str(field(raw, 'why')) ?? str(field(raw, 'stop_reason', 'type')),
+    ids: Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [],
+    isError: field(raw, 'is_error') === true,
+  }
+}
+
+// Listed newest first (`--order desc`); returned oldest first, as a transcript
+// reads. Events in the same instant keep their listed order, reversed.
+export function parseEvents(stdout: string): SessionEvent[] {
+  const text = stdout.trim()
+  if (text === '') return []
+  let items: unknown[]
+  try {
+    const parsed: unknown = JSON.parse(text)
+    items = Array.isArray(parsed) ? parsed : ((field(parsed, 'data') as unknown[] | undefined) ?? [])
+  } catch {
+    items = text.split('\n').flatMap(line => {
+      try {
+        return [JSON.parse(line) as unknown]
+      } catch {
+        return []
+      }
+    })
+  }
+  return items
+    .reverse()
+    .map(toEvent)
+    .filter((e): e is SessionEvent => e !== null)
+    .sort((a, b) => a.at - b.at)
+}
+
+// The tool calls the session waits on: the ids its last idle named, when it
+// went idle for an approval.
+export function pendingApprovals(events: SessionEvent[]): SessionEvent[] {
+  const idle = [...events].reverse().find(e => e.type === 'session.status_idle' || e.type === 'session.status_running')
+  if (!idle || idle.type !== 'session.status_idle' || idle.why !== 'requires_action') return []
+  return idle.ids.map(
+    id =>
+      events.find(e => e.id === id) ?? { id, type: 'agent.tool_use', at: 0, text: null, name: 'tool', input: null, why: null, ids: [], isError: false },
+  )
+}
+
+// The status a transcript ends in, for a session the roster has not listed.
+export function lastStatus(events: SessionEvent[]): SessionStatus | null {
+  const s = [...events].reverse().find(e => e.type.startsWith('session.status_'))
+  const map: Record<string, SessionStatus> = {
+    'session.status_running': 'running',
+    'session.status_idle': 'idle',
+    'session.status_rescheduled': 'rescheduling',
+    'session.status_terminated': 'terminated',
+  }
+  return s ? (map[s.type] ?? null) : null
+}
+

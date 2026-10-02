@@ -8,13 +8,34 @@ A [Claude Code](https://claude.com/claude-code) mod for keeping an eye on your [
 
 ![The roster pane: three sessions in play, four on the bench](./screenshots/pane.png)
 
-With the pane focused:
+`/roster` takes the keyboard when it opens. If you've clicked back into the prompt, `ctrl+x tab` or a click on the pane gives it back.
 
+- **`j` / `k`** move down and up the list. **Enter**, or a click on a row, opens that session (below).
+- **`o` Open** opens the selected session.
 - **`w` Watch** follows the selected session as a background task (see below).
-- **`c` Copy connect** copies `ant beta:sessions connect <id>`. Paste it into another terminal to follow the transcript live, send messages, and answer tool approvals.
+- **`c` Copy connect** copies `ant beta:sessions connect <id>`, for following the session live in another terminal.
 - **`r` Refresh** reloads the list. The pane also reloads on its own every `refreshSeconds` while it's open.
+- **Esc** closes the pane.
 
-Click a row or Tab to it and press Enter to select it. The line under the list shows the selected session's id, deployment and budget cap.
+The line under the list shows the selected session's id, deployment and budget cap.
+
+## Opening a session
+
+Enter on a row swaps the list for that session, in the same pane. `/roster-open <session id>` opens one directly.
+
+![A session waiting on a tool approval](./screenshots/session.png)
+
+The transcript shows the newest 60 events: your messages, the agent's replies, its tool calls, errors, and each time it went idle and why. It reloads every `refreshSeconds`.
+
+- **Waiting for you** appears when the session stopped on a tool approval (`requires_action`). **`y` Allow** and **`n` Deny** answer it with a `user.tool_confirmation`.
+- **The message box** sends what you type as a `user.message` when you press Enter. Tab moves between the box and the buttons.
+- **`i` Interrupt** stops a running session (`user.interrupt`). It only shows while the session is running.
+- **`w` Watch**, **`c` Copy connect** and **`r` Refresh** work as in the list.
+- **`b` Roster** or **Esc** goes back to the list.
+
+![The session after allowing the push and sending a message](./screenshots/reply.png)
+
+Each action runs `ant beta:sessions:events send --session-id <id> --event '<json>'`, then reloads the transcript.
 
 ## `/roster-watch`: one session as a background task
 
@@ -51,7 +72,7 @@ Or add `~/mods/roster` to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.cl
 
 ### Trying it without an account
 
-`tests/demo/ant` is a stand-in for the ant CLI that prints the sample sessions from the screenshots and a few made-up status events. Put that folder first on your `PATH` to try the mod without a Managed Agents account:
+`tests/demo/ant` is a stand-in for the ant CLI that prints the sample sessions from the screenshots, a short transcript for each, and a few made-up status events. It answers what you send with a canned reply and keeps it in your temp folder. **Everything it shows is sample data**: run without it to see your own sessions. Put that folder first on your `PATH` to try the mod without a Managed Agents account:
 
 ```sh
 PATH=~/mods/roster/tests/demo:$PATH claude --plugin-dir ~/mods/roster
@@ -69,4 +90,4 @@ PATH=~/mods/roster/tests/demo:$PATH claude --plugin-dir ~/mods/roster
 
 ## How it reads your sessions
 
-The pane runs `ant beta:sessions list --limit <limit> --format raw` with a `--transform` that keeps only the fields it draws. Without the transform, each session would carry its whole agent snapshot, system prompt included. The mod never sees your API key: ant makes the requests with its own login.
+The pane runs `ant beta:sessions list --limit <limit> --format raw` with a `--transform` that keeps only the fields it draws. An open session runs `ant beta:sessions:events list --session-id <id> --order desc --limit 60 --format raw`, with a transform of its own. Without the transform, each session would carry its whole agent snapshot, system prompt included. The mod never sees your API key: ant makes the requests with its own login.

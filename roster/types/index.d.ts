@@ -24,13 +24,42 @@ export type SessionList = {
   error: string | null
 }
 
+// One event of a session's transcript, cut down to what the session view draws.
+export type SessionEvent = {
+  id: string
+  type: string
+  at: number
+  text: string | null
+  // A tool use's tool, and its input in one line.
+  name: string | null
+  input: string | null
+  // A status event's stop reason, and the events it waits on.
+  why: string | null
+  ids: string[]
+  isError: boolean
+}
+
+// One open session view: its transcript as last loaded.
+export type SessionView = {
+  events: SessionEvent[]
+  loadedAt: number
+  isLoading: boolean
+  error: string | null
+  // What the last send did, for the line under the box.
+  sent: string | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'roster': {
       list: SessionList
       selected: string | null
+      // The session the pane shows instead of the list.
+      viewing: string | null
       // Session id -> when its watch ends (ms since epoch).
       watching: Record<string, number>
+      // Session id -> its open view.
+      views: Record<string, SessionView>
       now: number
     }
   }

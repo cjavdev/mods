@@ -57,11 +57,13 @@ Summarizes an idle session while its cache is still warm. When you come back to 
 
 ## roster
 
-Your Claude Managed Agents sessions in a pane: running ones in play, idle and ended ones on the bench, each with its agent, status and cost. Watch one and its status changes arrive in the transcript as a background task.
+Your Claude Managed Agents sessions in a pane: running ones in play, idle and ended ones on the bench, each with its agent, status and cost. Open one to read its transcript, message it and answer its tool approvals, or watch it and its status changes arrive in the transcript as a background task.
 
 [README and source →](./roster)
 
 ![The roster pane: three sessions in play, four on the bench](./roster/screenshots/pane.png)
+
+![A session opened from the roster, waiting on a tool approval](./roster/screenshots/session.png)
 
 ![The watched session in the tasks list](./roster/screenshots/task.png)
 
