@@ -58,17 +58,17 @@ In `/config`, or under `pluginConfigs["cache-shot-clock"].options` in settings:
 | `bigAt` | `15` | Seconds left when the big LED clock appears. `0` keeps the clock in the bar. |
 | `ttl` | `auto` | `auto`, `5m` or `1h`. Forces the countdown length instead of reading it from the transcript. |
 | `warnSeconds` | `60` | When to toast before an idle cache expires. `0` turns the toast off. |
+| `testTtlSeconds` | `0` | For testing: count down from this many seconds instead of the real TTL. `0` is off. |
 
-### See the buzzer without waiting an hour
+### Test it without waiting an hour
 
-If your account caches for 1 hour, force a 5-minute countdown for one session:
+`testTtlSeconds` makes the clock count down from any number of seconds. This runs a 40-second clock, so you see the big clock and the buzzer in under a minute:
 
 ```sh
-claude --plugin-dir ~/mods/cache-shot-clock \
-  --settings '{"pluginConfigs":{"cache-shot-clock":{"options":{"ttl":"5m"}}}}'
+claude --settings '{"pluginConfigs":{"cache-shot-clock":{"options":{"testTtlSeconds":40}}}}'
 ```
 
-This changes only what the clock counts. It doesn't change how long Anthropic keeps your cache.
+`testTtlSeconds` and `ttl` only change what the clock counts. They don't change how long Anthropic keeps your cache. To get a real 5-minute cache for a session, start Claude Code with `FORCE_PROMPT_CACHING_5M=1`; the clock picks that up by itself.
 
 ## How it works
 

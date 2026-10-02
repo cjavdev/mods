@@ -198,4 +198,45 @@ describe('cache-saver', () => {
     await clock.advance(10 * 60_000)
     expect(world.forks).toBe(0)
   })
+
+  test('testTtlSeconds runs the whole cycle on a short test TTL', { options: { testTtlSeconds: 60 } }, async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    const world = engine(on)
+    await $.session.start(START)
+    await step($)
+
+    // 45s before the 60s test TTL lapses: summarize.
+    await clock.advance(16_000)
+    expect(world.forks).toBe(1)
+
+    // The fork's read restarted the entry; a minute later it is cold.
+    await clock.advance(62_000)
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: 'Prompt cache went cold ' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', key: 'use-summary' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the choice typed as A or B and Enter', async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    const world = engine(on)
+    await $.session.start(START)
+    await step($)
+    await clock.advance(4 * 60_000 + 20_000)
+    await clock.advance(6 * 60_000)
+
+    // "b": never sent as a prompt; /compact is lined up (the kit runs no commands).
+    const b = await $.prompt.submit({ text: 'b', wait: false, origin: { kind: 'composer' } })
+    expect('drop' in b && b.drop).toBeTruthy()
+    await clock.settle()
+    expect(world.filled).toEqual(['/compact'])
+    expect(world.submitted).toEqual([])
+
+    // Back out with the band's button, then "A": the choice goes away.
+    let ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    await ui.press({ key: 'keep-full' })
+    await ui.unmount()
+    expect(await gone($)).toBe(true)
+    expect(world.submitted).toEqual([])
+  })
 })

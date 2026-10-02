@@ -25,11 +25,16 @@ const mem = {
   // The big LED clock shows from this much time left until BIG_AFTER_MS past
   // the buzzer; 0 keeps it to the bar under the prompt.
   bigMs: 15_000,
+  // For testing: count down from this instead of the real TTL; 0 is off.
+  testMs: 0,
   warnedFor: 0,
   buzzedFor: 0,
   // The 100ms timer that runs the tenths through the last ten seconds.
   fast: null as { cancel: () => void } | null,
 }
+
+// How long the clock runs: the cache's TTL, or the test override.
+const ttlMs = (c: Clock) => mem.testMs || TTL_MS[c.ttl]
 
 // LED amber on the floor, red when it's under ten.
 const AMBER = '#ffb000'
@@ -52,9 +57,9 @@ async function tick($: EngineInterface) {
   await update($, now, () => at)
   const c = await read($, clock)
   if (c === null) return
-  const left = c.lastAt + TTL_MS[c.ttl] - at
+  const left = c.lastAt + ttlMs(c) - at
 
-  if (mem.warnMs > 0 && !mem.isWorking && left > 0 && left <= mem.warnMs && mem.warnedFor !== c.lastAt) {
+  if (mem.warnMs > 0 && mem.warnMs < ttlMs(c) && !mem.isWorking && left > 0 && left <= mem.warnMs && mem.warnedFor !== c.lastAt) {
     mem.warnedFor = c.lastAt
     $.ui.toast(`Shot clock: ${fmtClock(left)} left on the prompt cache (${compact(c.prefixTokens)} tokens)`)
   }
@@ -115,6 +120,7 @@ export const register: Register = (on, options) => {
   mem.warnMs = Math.max(0, Number(options.warnSeconds ?? 60)) * 1000
   mem.fast = null
   mem.bigMs = Math.max(0, Number(options.bigAt ?? 15)) * 1000
+  mem.testMs = Math.max(0, Number(options.testTtlSeconds ?? 0)) * 1000
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
@@ -152,7 +158,9 @@ export const register: Register = (on, options) => {
   // refreshes the entry just as a turn would.
   on('model.fork', async ($, e, next) => {
     const result = await next(e)
-    if (result.isAnswered && result.usage.cache_read_input_tokens > 0) {
+    // A call on `$` reaches its hooks as `{ value }` (or `{ deny }`).
+    const reply = result.value
+    if (reply?.isAnswered && reply.usage.cache_read_input_tokens > 0) {
       const prev = await read($, clock)
       const at = await $.clock.now()
       if (prev) await update($, clock, () => ({ ...prev, lastAt: at }))
@@ -205,7 +213,7 @@ export const register: Register = (on, options) => {
     if (c === null) return next(e)
 
     const at = (await read($, now)) ?? Date.now()
-    const left = c.lastAt + TTL_MS[c.ttl] - at
+    const left = c.lastAt + ttlMs(c) - at
     if (isBig(left)) return next(e)
 
     const tail = `⏱ ${barClock(left)}`
@@ -221,14 +229,14 @@ export const register: Register = (on, options) => {
     if (c === null) return below
 
     const at = (await read($, now)) ?? Date.now()
-    const left = c.lastAt + TTL_MS[c.ttl] - at
+    const left = c.lastAt + ttlMs(c) - at
     if (!isBig(left)) return below
 
     const { Box, Text } = $.ui.resolve(e)
     const isViolation = left <= 0
     const digitColor = left <= 10_000 ? RED : AMBER
     const rows = bigDigits(fmtShot(left))
-    const ttlLabel = `${c.ttl}${c.ttlSource === 'assumed' ? '?' : ''} TTL`
+    const ttlLabel = mem.testMs ? `${mem.testMs / 1000}s test TTL` : `${c.ttl}${c.ttlSource === 'assumed' ? '?' : ''} TTL`
     const tokens = compact(c.prefixTokens)
 
     const side = isViolation

@@ -36,6 +36,12 @@
       "title": "Minimum session size (tokens)",
       "description": "Smaller sessions are cheap to re-cache, so no summary is offered.",
       "default": 30000
+    },
+    "testTtlSeconds": {
+      "type": "number",
+      "title": "Test TTL (seconds)",
+      "description": "For testing: treat the cache as expiring after this many seconds instead of the real TTL. 0 is off. It does not change how long the cache really lasts.",
+      "default": 0
     }
   }
 }

@@ -27,7 +27,9 @@ const SUMMARY_PROMPT = `The prompt cache for this conversation is about to expir
 6. All user messages: every non-tool-result user message, verbatim or nearly so.
 7. Pending tasks: what was asked for and is not done.
 8. Current work: precisely what was happening just before this summary.
-9. Next step: the next step in line with the user's latest request, quoting it where it helps.`
+9. Next step: the next step in line with the user's latest request, quoting it where it helps.
+
+Leave this request for a summary out of it: it is not part of the work.`
 
 const wrapSummary = (summary: string) =>
   `This session is being continued from an earlier conversation that was summarized to avoid re-writing its expired prompt cache. The summary below covers everything before this point.\n\n${summary}`
@@ -38,13 +40,17 @@ const mem = {
   forced: null as Ttl | null,
   ttl: '5m' as Ttl,
   leadMs: 45_000,
+  // For testing: treat the cache as expiring after this long; 0 is off.
+  testMs: 0,
   minTokens: 30_000,
   isWorking: false,
   // The step a summary was already tried for: one try per idle stretch.
   triedStep: -1,
+  // The step the menu was already raised for: once per cold cache.
+  askedStep: -1,
 }
 
-const cacheLeft = (c: Cache, at: number) => c.lastAt + TTL_MS[c.ttl] - at
+const cacheLeft = (c: Cache, at: number) => c.lastAt + (mem.testMs || TTL_MS[c.ttl]) - at
 
 async function learnTtl($: EngineInterface, ttl: Ttl) {
   if (mem.forced) return
@@ -114,15 +120,29 @@ async function keepFull($: EngineInterface) {
 }
 
 // B: swap the conversation for the summary. The engine skips a plugin's own
-// hooks on a compaction its hook started, so the compaction has to be the
-// person's: `/compact` goes in the prompt box, and Enter runs it through the
+// hooks on a compaction its hook started directly, so the mod runs `/compact`
+// the way the person would: queued as a command, it reaches the
 // session.compact hook below, which answers with the summary built earlier.
 async function useSummary($: EngineInterface) {
   const o = await read($, offer)
   if (!o || o.status !== 'ready') return
   void $.ui.close({ id: PREVIEW }).catch(() => undefined)
-  const filled = await $.prompt.fill({ text: '/compact' })
   await update($, offer, () => ({ ...o, status: 'armed' }))
+
+  const hasRun = await $.command.run({ command: 'compact' }).then(
+    () => true,
+    () => false,
+  )
+  if (hasRun) {
+    // Still armed: the compaction went past our hook, and the session is
+    // compacted all the same.
+    const after = await read($, offer)
+    if (after?.status === 'armed') await forget($)
+    return
+  }
+
+  // The command could not be run for the person: leave it for their Enter.
+  const filled = await $.prompt.fill({ text: '/compact' })
   if (!filled.isFilled) $.ui.toast('cache-saver: run /compact to continue from the summary')
 }
 
@@ -131,6 +151,29 @@ async function disarm($: EngineInterface) {
   await update($, offer, o => (o?.status === 'armed' ? { ...o, status: 'ready' } : o))
   const box = await $.prompt.read()
   if (box.text.trim() === '/compact') await $.prompt.fill({ text: '' })
+}
+
+// The choice as the engine's own question dialog: it takes the keyboard by
+// itself (arrows and Enter, or the option's number). Dismissed with Esc, the
+// band's buttons stay up as the way back to it.
+async function ask($: EngineInterface, o: Offer) {
+  const saved = Math.round((1 - o.summaryTokens / Math.max(1, o.fullTokens)) * 100)
+  const keep = `Keep full session: re-cache ${compact(o.fullTokens)} tokens`
+  const summary = `Continue from summary: ${compact(o.summaryTokens)} tokens (${saved}% smaller)`
+  const look = 'Preview the summary first'
+
+  const answer = await $.ui
+    .ask('Your prompt cache went cold. How do you want to continue?', {
+      header: 'Cache cold',
+      options: [keep, summary, look],
+    })
+    .catch(() => null)
+
+  if (answer === keep) await keepFull($)
+  else if (answer === summary) await useSummary($)
+  else if (answer === look) await preview($)
+  // Typed under "Other": it is the next prompt, sent once they choose.
+  else if (answer) await update($, offer, prev => (prev ? { ...prev, held: prev.held ? `${prev.held}\n\n${answer}` : answer } : prev))
 }
 
 async function preview($: EngineInterface) {
@@ -145,6 +188,7 @@ export const register: Register = (on, options) => {
   mem.ttl = mem.forced ?? '5m'
   mem.leadMs = Math.max(5, Number(options.leadSeconds ?? 45)) * 1000
   mem.minTokens = Math.max(0, Number(options.minTokens ?? 30_000))
+  mem.testMs = Math.max(0, Number(options.testTtlSeconds ?? 0)) * 1000
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
@@ -158,8 +202,18 @@ export const register: Register = (on, options) => {
       await update($, now, () => at)
 
       const c = await read($, cache)
-      if (!c || mem.isWorking || c.prefixTokens < mem.minTokens || mem.triedStep === c.step) return
+      if (!c || mem.isWorking) return
       const left = cacheLeft(c, at)
+
+      // Cold with a summary ready: raise the menu, once.
+      const o = await read($, offer)
+      if (left <= 0 && o?.status === 'ready' && o.step === c.step && mem.askedStep !== c.step) {
+        mem.askedStep = c.step
+        void ask($, o)
+        return
+      }
+
+      if (c.prefixTokens < mem.minTokens || mem.triedStep === c.step) return
       if (left <= mem.leadMs && left > MIN_LEFT_MS) void prepare($, c)
     })
     return result
@@ -237,13 +291,25 @@ export const register: Register = (on, options) => {
     const isChoosing = o !== null && (o.status === 'ready' || o.status === 'armed')
     if (!o || !isChoosing || !isCold || !PERSON.has(e.origin.kind) || e.text.trimStart().startsWith('/')) return next(e)
 
+    // The choice typed instead of pressed: a or 1, b or 2. Acted on from a
+    // timer, since a command cannot be run from inside the hook a prompt waits on.
+    const typed = e.text.trim().toLowerCase()
+    if (o.status === 'ready' && (typed === 'a' || typed === '1')) {
+      $.clock.after(0, () => void keepFull($))
+      return { drop: 'cache-saver: keeping the full session' }
+    }
+    if (o.status === 'ready' && (typed === 'b' || typed === '2')) {
+      $.clock.after(0, () => void useSummary($))
+      return { drop: 'cache-saver: continuing from the summary' }
+    }
+
     const held = o.held ? `${o.held}\n\n${e.text}` : e.text
     await update($, offer, prev => (prev ? { ...prev, held } : prev))
     return {
       drop:
         o.status === 'armed'
           ? 'cache-saver: held until /compact runs; it sends after'
-          : 'cache-saver: held until you pick 1 (keep full session) or 2 (continue from summary) above',
+          : 'cache-saver: held until you pick A (keep full session) or B (continue from summary) above',
     }
   })
 
@@ -324,6 +390,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Box>
             <Button key="preview" hotkey="3" plain dimColor label="Preview summary" onPress={() => preview($)} />
+            <Text dimColor>{'  ·  type A or B and press Enter, or press 1 or 2'}</Text>
           </Box>
           {o.held !== null && <Text dimColor>{`Held: “${o.held.slice(0, 60)}${o.held.length > 60 ? '…' : ''}” sends after you choose`}</Text>}
         </Box>

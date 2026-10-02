@@ -274,4 +274,28 @@ describe('big clock', () => {
     expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
     await ui.unmount()
   })
+
+  test('testTtlSeconds counts down from a short test TTL', { options: { testTtlSeconds: 30 } }, async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    const toasts: string[] = []
+    engine(on, () => ROW_1H, toasts)
+    await $.session.start(START)
+    await step($)
+    await $.classic.Stop({ stop_hook_active: false })
+
+    let ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('00:30') })).toBeDefined()
+    await ui.unmount()
+
+    await clock.advance(18_000)
+    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await reads(ui, '12')).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /30s test TTL/ })).toBeDefined()
+    await ui.unmount()
+
+    await clock.advance(13_000)
+    expect(toasts.some(t => t.startsWith('BZZZT!'))).toBe(true)
+    // No "60 seconds left" warning on a clock shorter than that.
+    expect(toasts.some(t => t.startsWith('Shot clock:'))).toBe(false)
+  })
 })

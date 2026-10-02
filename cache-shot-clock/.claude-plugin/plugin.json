@@ -36,6 +36,12 @@
       "title": "Warn at (seconds left)",
       "description": "Toast when the idle cache has this many seconds left; 0 turns the toast off.",
       "default": 60
+    },
+    "testTtlSeconds": {
+      "type": "number",
+      "title": "Test TTL (seconds)",
+      "description": "For testing: count down from this many seconds instead of the real TTL. 0 is off. It does not change how long the cache really lasts.",
+      "default": 0
     }
   }
 }
