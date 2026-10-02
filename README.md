@@ -7,6 +7,7 @@ Mods for [Claude Code](https://claude.com/claude-code): small plugins that add w
 - [cache-shot-clock](#cache-shot-clock): a countdown to when your prompt cache expires
 - [context-meter](#context-meter): how full the context window is
 - [cache-saver](#cache-saver): pick up an idle session from a summary instead of re-caching it
+- [link-bar](#link-bar): links to the artifacts and pull requests you mentioned last
 
 ## cache-shot-clock
 
@@ -54,6 +55,20 @@ Summarizes an idle session while its cache is still warm. When you come back to 
 | `minTokens` | `30000` | Sessions smaller than this get no summary. |
 | `testTtlSeconds` | `0` | For testing: treat the cache as expiring after this many seconds. |
 
+## link-bar
+
+A row of links under the prompt to the 3 claude.ai artifacts and 5 GitHub pull requests mentioned most recently in the conversation, newest first. Each one is a real hyperlink you can click from the terminal.
+
+[README and source →](./link-bar)
+
+![The links row under the prompt](./link-bar/screenshots/bar.png)
+
+| Setting | Default | |
+| --- | --- | --- |
+| `enabled` | `true` | Turns the mod off without unloading it. |
+| `artifacts` | `3` | How many of the most recently mentioned artifacts to link. `0` shows none. |
+| `pullRequests` | `5` | How many of the most recently mentioned pull requests to link. `0` shows none. |
+
 ## Install
 
 You need Claude Code 2.1.287 or newer.
@@ -65,7 +80,7 @@ git clone https://github.com/cjavdev/mods.git ~/mods
 **Try them in one session:**
 
 ```sh
-claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --plugin-dir ~/mods/cache-saver
+claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --plugin-dir ~/mods/cache-saver --plugin-dir ~/mods/link-bar
 ```
 
 **Load them in every session:** add the folders to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, separated by `:`.
@@ -73,7 +88,7 @@ claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --
 ```json
 {
   "env": {
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/mods/cache-shot-clock:~/mods/context-meter:~/mods/cache-saver"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/mods/cache-shot-clock:~/mods/context-meter:~/mods/cache-saver:~/mods/link-bar"
   }
 }
 ```

@@ -8,6 +8,8 @@ def x256(n):
         n-=16; v=[0,95,135,175,215,255]; return (v[n//36],v[n//6%6],v[n%6])
     g=8+(n-232)*10; return (g,g,g)
 def line2html(s):
+    # Hyperlinks and other OSC sequences draw nothing.
+    s=re.sub(r'\x1b\][^\x07\x1b]*(\x07|\x1b\\)','',s)
     out=[]; st={}
     for m in re.finditer(r'\x1b\[([0-9;]*)m|([^\x1b]+)', s):
         if m.group(2) is not None:
