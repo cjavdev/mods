@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+# A stand-in for the ant CLI with sample sessions, for screenshots and trying
+# the mod without a Managed Agents account. Put this folder first on PATH.
+import json, sys, time
+from datetime import datetime, timedelta, timezone
+
+now = datetime.now(timezone.utc)
+ago = lambda m: (now - timedelta(minutes=m)).strftime('%Y-%m-%dT%H:%M:%SZ')
+S = [
+    ('sesn_011CZkZAtmR3yMPDzynEDxu7', 'Review PR #482: auth middleware', 'running', 'Code reviewer', 7, 84, 200, 12, 1, None),
+    ('sesn_011CZkZBa91KpQ2LmN4xRt8w', 'Fix flaky checkout test', 'running', 'CI fixer', 3, 41, 500, 6, 0, None),
+    ('sesn_011CZkZCq2PLmv7Xw0yHnE3s', 'Triage issues 2026-10-02', 'rescheduling', 'Nightly triage', 2, 12, 200, 20, 3, 'depl_011CZkYnightly'),
+    ('sesn_011CZkZDx8RtvB2nQpL6sK1a', 'Review PR #479: billing webhooks', 'idle', 'Code reviewer', 7, 140, 200, 150, 120, None),
+    ('sesn_011CZkZEw3MnbV9cXz2qLp5d', 'Summarize September incidents', 'idle', 'Researcher', 4, 233, None, 260, 210, None),
+    ('sesn_011CZkZF5tYuIo8pAs1dFg2h', 'Plan Q4 roadmap', 'terminated', 'Engineering lead', 3, 480, None, 420, 300, None),
+    ('sesn_011CZkZG7hJkLz4xCv6bNm9q', 'Triage issues 2026-10-01', 'terminated', 'Nightly triage', 2, 197, 200, 1460, 1440, 'depl_011CZkYnightly'),
+]
+args = sys.argv[1:]
+if args[:2] == ['beta:sessions', 'list']:
+    print(json.dumps([
+        {'id': i, 'title': t, 'status': st, 'agent_name': a, 'agent_version': v, 'cost': str(c),
+         'cap': str(cap) if cap else None, 'created_at': ago(cr), 'updated_at': ago(up), 'deployment_id': d}
+        for (i, t, st, a, v, c, cap, cr, up, d) in S]))
+elif args[:2] == ['beta:sessions:events', 'stream']:
+    for ev, why, wait in [('session.status_running', None, 1), ('session.status_idle', 'requires_action', 8), ('session.status_running', None, 6), ('session.status_idle', 'end_turn', 10)]:
+        time.sleep(wait)
+        print(json.dumps({'type': ev, 'why': why}), flush=True)
+    time.sleep(3600)
+else:
+    print(f'demo ant: {" ".join(args)} is not part of the demo', file=sys.stderr)
+    sys.exit(2)

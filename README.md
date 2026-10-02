@@ -7,6 +7,7 @@ Mods for [Claude Code](https://claude.com/claude-code): small plugins that add w
 - [cache-shot-clock](#cache-shot-clock): a countdown to when your prompt cache expires
 - [context-meter](#context-meter): how full the context window is
 - [cache-saver](#cache-saver): pick up an idle session from a summary instead of re-caching it
+- [roster](#roster): your Claude Managed Agents sessions, in play and on the bench
 
 ## cache-shot-clock
 
@@ -54,9 +55,27 @@ Summarizes an idle session while its cache is still warm. When you come back to 
 | `minTokens` | `30000` | Sessions smaller than this get no summary. |
 | `testTtlSeconds` | `0` | For testing: treat the cache as expiring after this many seconds. |
 
+## roster
+
+Your Claude Managed Agents sessions in a pane: running ones in play, idle and ended ones on the bench, each with its agent, status and cost. Watch one and its status changes arrive in the transcript as a background task.
+
+[README and source →](./roster)
+
+![The roster pane: three sessions in play, four on the bench](./roster/screenshots/pane.png)
+
+![The watched session in the tasks list](./roster/screenshots/task.png)
+
+| Setting | Default | |
+| --- | --- | --- |
+| `enabled` | `true` | Turns the mod off without unloading it. |
+| `antPath` | `ant` | The ant command to run: a name on your `PATH` or a full path. |
+| `limit` | `50` | How many of the newest sessions the pane loads. |
+| `refreshSeconds` | `15` | How often the open pane reloads. `0` reloads only on `r`. |
+| `watchMinutes` | `30` | How long a watch runs before it stops. At most 30. |
+
 ## Install
 
-You need Claude Code 2.1.287 or newer.
+You need Claude Code 2.1.287 or newer. roster also needs the [ant CLI](https://platform.claude.com/docs/en/cli-sdks-libraries/cli/quickstart), logged in.
 
 ```sh
 git clone https://github.com/cjavdev/mods.git ~/mods
@@ -65,7 +84,7 @@ git clone https://github.com/cjavdev/mods.git ~/mods
 **Try them in one session:**
 
 ```sh
-claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --plugin-dir ~/mods/cache-saver
+claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --plugin-dir ~/mods/cache-saver --plugin-dir ~/mods/roster
 ```
 
 **Load them in every session:** add the folders to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, separated by `:`.
@@ -73,7 +92,7 @@ claude --plugin-dir ~/mods/cache-shot-clock --plugin-dir ~/mods/context-meter --
 ```json
 {
   "env": {
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/mods/cache-shot-clock:~/mods/context-meter:~/mods/cache-saver"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/mods/cache-shot-clock:~/mods/context-meter:~/mods/cache-saver:~/mods/roster"
   }
 }
 ```
