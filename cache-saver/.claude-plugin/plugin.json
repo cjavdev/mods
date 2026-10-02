@@ -2,16 +2,28 @@
   "name": "cache-saver",
   "version": "0.1.0",
   "description": "When an idle session's prompt cache is about to expire, summarizes it while the cache is still warm; when you come back, pick A (keep the full session, pay the cache write) or B (continue from the summary).",
-  "author": { "name": "CJ Avilla" },
+  "author": {
+    "name": "CJ Avilla"
+  },
   "homepage": "https://github.com/cjavdev/mods",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Summarize idle sessions before the cache expires and offer the A/B choice.",
+      "default": true
+    },
     "ttl": {
       "type": "string",
       "title": "Cache TTL",
       "description": "auto reads it from the session transcript; 5m or 1h forces it.",
       "default": "auto",
-      "options": ["auto", "5m", "1h"]
+      "options": [
+        "auto",
+        "5m",
+        "1h"
+      ]
     },
     "leadSeconds": {
       "type": "number",

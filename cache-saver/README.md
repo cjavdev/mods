@@ -2,12 +2,7 @@
 
 A [Claude Code](https://claude.com/claude-code) mod for when you walk away from a long session. Just before the idle prompt cache expires, it summarizes the conversation while the cache is still warm. When you come back to a cold cache, you choose how to continue:
 
-```
-Prompt cache went cold 12m ago. How do you want to continue?
-[ A · Keep full session ]  re-cache 121k tokens
-[ B · Continue from summary ]  4k tokens (97% smaller)
-3: Preview summary
-```
+![The choice cache-saver offers once the cache is cold](./screenshots/choice.png)
 
 - **1 / A: keep the full session.** Nothing changes. Your next turn writes all 121k tokens to the cache again.
 - **2 / B: continue from the summary.** `/compact` goes into the prompt box; press Enter and the conversation is replaced by the summary already built. No second summarizer request has to read the cold transcript.
@@ -40,6 +35,7 @@ The engine skips a plugin's own hooks on any compaction that plugin's hook start
 
 | Option | Default | |
 | --- | --- | --- |
+| `enabled` | `true` | Turns the mod off without unloading it. |
 | `ttl` | `auto` | `auto` reads the TTL from the transcript; `5m` or `1h` forces it. |
 | `leadSeconds` | `45` | How long before the idle cache expires to build the summary. |
 | `minTokens` | `30000` | Sessions smaller than this get no summary. |

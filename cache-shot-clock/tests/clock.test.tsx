@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { EngineInterface, On } from 'claude-code'
 
-import { fmtAgo, fmtClock, prefixOf, ttlFromTranscript } from '../hooks/clock'
+import { bigDigits, fmtAgo, fmtClock, fmtShot, prefixOf, ttlFromTranscript } from '../hooks/clock'
 
 const BAND = {
   plugin: 'cache-shot-clock',
@@ -14,6 +14,12 @@ const BAND = {
     scroll: { offset: 0, bodyRows: 10 },
     view: {},
   },
+} as const
+
+const HINT = {
+  plugin: 'cache-shot-clock',
+  component: 'PromptHint',
+  props: { isDraft: false, isWorking: false, hint: 'auto mode on · 1 shell' },
 } as const
 
 const START = { cwd: '/tmp', surface: 'terminal', isInteractive: true } as const
@@ -32,19 +38,37 @@ const ROW_NONE = '{"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"eph
 
 // The engine beneath the plugin: one model response per step, and a
 // transcript whose tail `transcript()` names.
-const engine = (on: On, transcript: () => string) => {
+const engine = (on: On, transcript: () => string, toasts: string[] = []) => {
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: 'ok', toolUses: [], stopReason: 'end_turn' as const, usage: { ...USAGE, model: e.model } }
   })
   on('process.run', () => ({ value: { exitCode: 0, stdout: transcript(), stderr: '' } }))
-  on('ui.toast', () => ({ value: {} }))
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: {} }
+  })
   on('classic.Stop', () => ({}))
+  // The hint row as the engine draws it: its line, then any tail.
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>{e.props.tail ? `${e.props.hint} · ${e.props.tail}` : e.props.hint}</Text>
+  })
   // What the band shows beneath the mod: nothing of its own.
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)
     return <Box />
   })
+}
+
+type Mounted = { find: (q: { type: 'Text'; text: string | RegExp }) => Promise<unknown> }
+
+// Whether the panel's three LED rows read `shot`.
+const reads = async (ui: Mounted, shot: string) => {
+  for (const row of bigDigits(shot)) {
+    if ((await ui.find({ type: 'Text', text: row })) === undefined) return false
+  }
+  return true
 }
 
 const step = async ($: EngineInterface, agentId?: string) => {
@@ -65,6 +89,15 @@ describe('helpers', () => {
     expect(fmtAgo(65 * 60_000)).toBe('1h 5m')
   })
 
+  test('reads like an arena shot clock', async () => {
+    expect(fmtShot(300_000)).toBe('5:00')
+    expect(fmtShot(45_200)).toBe('46')
+    expect(fmtShot(9_420)).toBe('9.5')
+    expect(fmtShot(100)).toBe('0.1')
+    expect(fmtShot(0)).toBe('0.0')
+    expect(bigDigits('24')).toEqual(['▀▀█ █ █', '█▀▀ ▀▀█', '▀▀▀   ▀'])
+  })
+
   test('prefix is everything the next request re-sends', async () => {
     expect(prefixOf(USAGE)).toBe(120_510)
   })
@@ -77,19 +110,25 @@ describe('helpers', () => {
   })
 })
 
-describe('band', () => {
-  test('hidden until the first response', async ($, on) => {
+// What the hint row reads with the mod's tail.
+const HINT_LINE = (clock: string) => `auto mode on · 1 shell · ⏱ ${clock}`
+
+describe('bar', () => {
+  test('nothing until the first response', async ($, on) => {
     mock.clock(on, { now: 1_000_000 })
     engine(on, () => '')
     await $.session.start(START)
     for (const surface of SURFACES) {
-      const ui = await $.ui.mount({ ...BAND, surface })
-      expect(await ui.find({ type: 'Text', text: /Cache/ })).toBeUndefined()
+      let ui = await $.ui.mount({ ...HINT, surface })
+      expect(await ui.find({ type: 'Text', text: 'auto mode on · 1 shell' })).toBeDefined()
+      await ui.unmount()
+      ui = await $.ui.mount({ ...BAND, surface })
+      expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
       await ui.unmount()
     }
   })
 
-  test('counts down a 5m cache and goes cold', async ($, on) => {
+  test('just the clock in the bar, no band, while there is time', async ($, on) => {
     const clock = mock.clock(on, { now: 1_000_000 })
     engine(on, () => ROW_5M)
     await $.session.start(START)
@@ -97,29 +136,17 @@ describe('band', () => {
     await $.classic.Stop({ stop_hook_active: false })
 
     for (const surface of SURFACES) {
-      const ui = await $.ui.mount({ ...BAND, surface })
-      expect(await ui.find({ type: 'Text', text: '5:00' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /5m TTL · 121k tokens warm/ })).toBeDefined()
+      let ui = await $.ui.mount({ ...HINT, surface })
+      expect(await ui.find({ type: 'Text', text: HINT_LINE('05:00') })).toBeDefined()
+      await ui.unmount()
+      ui = await $.ui.mount({ ...BAND, surface })
+      expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
       await ui.unmount()
     }
 
     await clock.advance(4 * 60_000)
-    let ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: '1:00' })).toBeDefined()
-    await ui.unmount()
-
-    await clock.advance(2 * 60_000)
-    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: 'cold' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /for 1m · next turn re-writes/ })).toBeDefined()
-    await ui.unmount()
-
-    // A new response restarts the clock. This one still read 100k from the
-    // cache six minutes on, which only a 1h entry survives.
-    await step($)
-    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: '60:00' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1h TTL/ })).toBeDefined()
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('01:00') })).toBeDefined()
     await ui.unmount()
   })
 
@@ -131,9 +158,8 @@ describe('band', () => {
     await $.classic.Stop({ stop_hook_active: false })
     await clock.advance(10 * 60_000)
 
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: '50:00' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /1h TTL/ })).toBeDefined()
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('50:00') })).toBeDefined()
     await ui.unmount()
   })
 
@@ -145,8 +171,8 @@ describe('band', () => {
     await clock.advance(60_000)
     await step($, 'agent-1')
 
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: '4:00' })).toBeDefined()
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('04:00') })).toBeDefined()
     await ui.unmount()
   })
 
@@ -157,8 +183,95 @@ describe('band', () => {
     await step($)
     await $.classic.Stop({ stop_hook_active: false })
 
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: '60:00' })).toBeDefined()
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('60:00') })).toBeDefined()
+    await ui.unmount()
+  })
+})
+
+describe('big clock', () => {
+  test('takes over for the last 15 seconds, tenths at the end, then the buzzer', async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    const toasts: string[] = []
+    engine(on, () => ROW_5M, toasts)
+    await $.session.start(START)
+    await step($)
+    await $.classic.Stop({ stop_hook_active: false })
+
+    await clock.advance(5 * 60_000 - 15_000)
+    for (const surface of SURFACES) {
+      let ui = await $.ui.mount({ ...BAND, surface })
+      expect(await reads(ui, '15')).toBe(true)
+      expect(await ui.find({ type: 'Text', text: 'SHOT CLOCK' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '121k tokens on the line' })).toBeDefined()
+      await ui.unmount()
+      // The bar steps aside while the big clock is up.
+      ui = await $.ui.mount({ ...HINT, surface })
+      expect(await ui.find({ type: 'Text', text: 'auto mode on · 1 shell' })).toBeDefined()
+      await ui.unmount()
+    }
+
+    await clock.advance(10_700)
+    let ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await reads(ui, '4.3')).toBe(true)
+    await ui.unmount()
+
+    await clock.advance(5_000)
+    expect(toasts.some(t => t.startsWith('BZZZT!'))).toBe(true)
+    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: 'SHOT CLOCK VIOLATION' })).toBeDefined()
+    expect(await reads(ui, '0.0')).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /re-writes 121k tokens/ })).toBeDefined()
+    await ui.unmount()
+
+    // Ten seconds past the buzzer it folds back into the bar.
+    await clock.advance(10_000)
+    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
+    await ui.unmount()
+    ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('00:00') })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a hit after a 5m gap proves 1h and restarts the clock', async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    engine(on, () => '')
+    await $.session.start(START)
+    await step($)
+    await clock.advance(6 * 60_000)
+    // The stub's response still read 100k from the cache six minutes on.
+    await step($)
+    const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('60:00') })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('bigAt 0 keeps it to the bar', { options: { bigAt: 0 } }, async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    engine(on, () => ROW_5M)
+    await $.session.start(START)
+    await step($)
+    await clock.advance(5 * 60_000 - 5_000)
+    let ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
+    await ui.unmount()
+    ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: HINT_LINE('00:05') })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('off in /config: no bar clock, no big clock', { options: { enabled: false } }, async ($, on) => {
+    const clock = mock.clock(on, { now: 1_000_000 })
+    engine(on, () => ROW_5M)
+    await $.session.start(START)
+    await step($)
+    await clock.advance(5 * 60_000 - 5_000)
+    let ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: 'auto mode on · 1 shell' })).toBeDefined()
+    await ui.unmount()
+    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /SHOT CLOCK/ })).toBeUndefined()
     await ui.unmount()
   })
 })

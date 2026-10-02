@@ -1,17 +1,35 @@
 {
   "name": "cache-shot-clock",
-  "version": "0.1.0",
-  "description": "A shot clock above the prompt counting down the prompt cache's TTL, so you know how long you have before the next turn pays a full cache write.",
-  "author": { "name": "CJ Avilla" },
+  "version": "0.2.0",
+  "description": "A shot clock for the prompt cache's TTL: a small countdown in the bar under the prompt, and a big LED clock above it for the last seconds before the next turn pays a full cache write.",
+  "author": {
+    "name": "CJ Avilla"
+  },
   "homepage": "https://github.com/cjavdev/mods",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Show the shot clock.",
+      "default": true
+    },
+    "bigAt": {
+      "type": "number",
+      "title": "Big clock at (seconds left)",
+      "description": "The LED clock appears above the prompt from this many seconds left until just after the buzzer; 0 keeps it to the bar under the prompt.",
+      "default": 15
+    },
     "ttl": {
       "type": "string",
       "title": "Cache TTL",
       "description": "auto reads it from the session transcript; 5m or 1h forces it.",
       "default": "auto",
-      "options": ["auto", "5m", "1h"]
+      "options": [
+        "auto",
+        "5m",
+        "1h"
+      ]
     },
     "warnSeconds": {
       "type": "number",

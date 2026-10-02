@@ -2,12 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Fill } from '../types'
-import { bar, colorFor, compact } from './meter'
+import { bar, compact } from './meter'
 
 const fill = atom({ plugin: 'context-meter', key: 'fill' } as const, null)
 
 // Reads the window's fill (the free call: no token counting) and stores it;
-// a changed value redraws the band.
+// a changed value redraws the meter.
 const refresh = async ($: EngineInterface) => {
   const { context } = await $.session.usage()
   const now: Fill | null =
@@ -20,7 +20,10 @@ const refresh = async ($: EngineInterface) => {
   )
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // Off in /config: hook nothing at all.
+  if (options.enabled === false) return
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await refresh($)
@@ -29,7 +32,7 @@ export const register: Register = on => {
     return result
   })
 
-  // A tool result follows a model response, so the bar moves mid-turn.
+  // A tool result follows a model response, so the meter moves mid-turn.
   on('tool.call', async ($, e, next) => {
     const result = await next(e)
     await refresh($)
@@ -42,36 +45,15 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
-
-    const { Box, Text } = $.ui.resolve(e)
+  // A five-cell meter at the end of the hint row under the prompt:
+  // `█░░░░ 5% 49k/1M`. Nothing until a response of the live window (a fresh
+  // session, or one just compacted or cleared).
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     const f = await read($, fill)
-    const width = Math.max(10, Math.min(30, e.props.bodyColumns - 40))
+    if (f === null) return next(e)
 
-    // No reading until a response of the live window: a fresh session, or
-    // one just compacted or cleared.
-    if (f === null) {
-      return (
-        <Box>
-          <Text dimColor>Context {'░'.repeat(width)} waiting for a response</Text>
-        </Box>
-      )
-    }
-
-    const color = colorFor(f.percent)
-    const { filled, empty } = bar(f.percent, width)
-
-    return (
-      <Box>
-        <Text dimColor>Context </Text>
-        <Text color={color}>{filled}</Text>
-        <Text dimColor>{empty}</Text>
-        <Text color={color} bold>
-          {` ${f.percent}%`}
-        </Text>
-        <Text dimColor>{` · ${compact(f.tokens)} / ${compact(f.window)} tokens`}</Text>
-      </Box>
-    )
+    const { filled, empty } = bar(f.percent, 5)
+    const meter = `${filled}${empty} ${f.percent}% ${compact(f.tokens)}/${compact(f.window)}`
+    return next({ ...e, props: { ...e.props, tail: e.props.tail ? `${meter} · ${e.props.tail}` : meter } })
   })
 }

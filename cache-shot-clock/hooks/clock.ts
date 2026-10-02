@@ -56,23 +56,33 @@ export const compact = (tokens: number): string =>
       ? `${Math.round(tokens / 1000)}k`
       : `${tokens}`
 
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
-
-const hslToHex = (h: number, s: number, l: number): string => {
-  const a = s * Math.min(l, 1 - l)
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12
-    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
-    return Math.round(255 * c).toString(16).padStart(2, '0')
-  }
-  return `#${f(0)}${f(8)}${f(4)}`
+// What the shot clock reads, as an arena clock would: m:ss above a minute,
+// whole seconds below it, tenths in the last ten, 0.0 at the buzzer.
+export const fmtShot = (ms: number): string => {
+  if (ms <= 0) return '0.0'
+  if (ms <= 10_000) return (Math.ceil(ms / 100) / 10).toFixed(1)
+  const total = Math.ceil(ms / 1000)
+  return total >= 60 ? fmtClock(ms) : String(total)
 }
 
-// Green with the whole TTL left, through yellow, to red at the buzzer.
-export const colorFor = (fractionLeft: number): string =>
-  hslToHex(120 * clamp(fractionLeft, 0, 1), 0.85, 0.5)
+// A three-row seven-segment font in half blocks.
+const FONT: Record<string, readonly [string, string, string]> = {
+  '0': ['█▀█', '█ █', '▀▀▀'],
+  '1': ['  █', '  █', '  ▀'],
+  '2': ['▀▀█', '█▀▀', '▀▀▀'],
+  '3': ['▀▀█', ' ▀█', '▀▀▀'],
+  '4': ['█ █', '▀▀█', '  ▀'],
+  '5': ['█▀▀', '▀▀█', '▀▀▀'],
+  '6': ['█▀▀', '█▀█', '▀▀▀'],
+  '7': ['▀▀█', '  █', '  ▀'],
+  '8': ['█▀█', '█▀█', '▀▀▀'],
+  '9': ['█▀█', '▀▀█', '▀▀▀'],
+  ':': [' ', '▀', '▀'],
+  '.': [' ', ' ', '▀'],
+}
 
-export const bar = (fractionLeft: number, width: number): { filled: string; empty: string } => {
-  const n = Math.round(clamp(fractionLeft, 0, 1) * width)
-  return { filled: '█'.repeat(n), empty: '░'.repeat(width - n) }
+// `text` drawn three rows tall, one column between glyphs.
+export const bigDigits = (text: string): [string, string, string] => {
+  const glyphs = [...text].map(ch => FONT[ch] ?? FONT['0']!)
+  return [0, 1, 2].map(row => glyphs.map(g => g[row]).join(' ')) as [string, string, string]
 }

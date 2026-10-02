@@ -138,6 +138,9 @@ async function preview($: EngineInterface) {
 }
 
 export const register: Register = (on, options) => {
+  // Off in /config: hook nothing at all.
+  if (options.enabled === false) return
+
   mem.forced = options.ttl === '5m' || options.ttl === '1h' ? options.ttl : null
   mem.ttl = mem.forced ?? '5m'
   mem.leadMs = Math.max(5, Number(options.leadSeconds ?? 45)) * 1000

@@ -1,8 +1,16 @@
 {
   "name": "context-meter",
-  "version": "0.1.0",
-  "description": "A band above the prompt showing how full the context window is, fading from green to red as it fills.",
+  "version": "0.2.0",
+  "description": "A tiny meter in the bar under the prompt showing how full the context window is: five cells, the percent and the token counts.",
   "author": { "name": "CJ Avilla" },
   "homepage": "https://github.com/cjavdev/mods",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Show the context meter in the bar under the prompt.",
+      "default": true
+    }
+  }
 }
